@@ -1,0 +1,24 @@
+[package]
+name = "btcfi_contract"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stylus-sdk = "0.10.0"
+hex = "0.4.3"
+sha2 = "0.10.8"
+mini-alloc = "1.0.0"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[features]
+export-abi = ["stylus-sdk/export-abi"]
+debug = ["stylus-sdk/debug"]
+
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
+panic = "abort"
+opt-level = "z"
