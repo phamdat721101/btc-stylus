@@ -1,138 +1,131 @@
-# A Beginner's Guide to Building on Arbitrum Stylus: Bitcoin Hash Verification
+# 📘 Arbitrum Stylus: BTCHash Verifier & On-Chain Testing Guide
 
-Arbitrum Stylus is a powerful new way to write smart contracts on Arbitrum. Unlike traditional EVM development which restricts you to Solidity or Vyper, Stylus allows you to write contracts in **Rust**, **C** and **C++** that compile to WebAssembly (WASM).
+> [!NOTE]
+> **Arbitrum Stylus** empowers you to write efficient smart contracts in Rust (or C/C++) that run alongside Solidity contracts on Arbitrum One and Sepolia. This guide demonstrates a practical BTCFi use case: verifying Bitcoin block headers on-chain.
 
-This guide will walk you through the basics of Stylus by analyzing a simple yet practical example: **Verifying Bitcoin Block Headers**.
+---
 
-## Why Stylus?
+## 🏗️ 1. Understanding the Smart Contract
 
-1.  **Performance**: WASM contracts are much more efficient than EVM bytecode, allowing for compute-intensive tasks (like cryptographic verification) that would be too expensive in Solidity.
-2.  **Safety**: By using Rust, you get memory safety, strong typing, and a rich ecosystem of libraries (crates) out of the box.
-3.  **Interoperability**: Stylus contracts are fully composable with existing Solidity contracts.
+We have built a **Bitcoin Header Verifier** (`BtcVerifier`). Its primary job is to take a raw Bitcoin block header (in hex) and verify its integrity by performing a **Double SHA-256 Hash**, often called `Hash256` in Bitcoin protocol terms.
 
-## Project Structure
+### 📝 The Rust Contract (`src/lib.rs`)
 
-A typical Stylus project looks like a standard Rust project:
-
-```text
-.
-├── Cargo.toml      # Rust dependencies
-├── Stylus.toml     # Stylus-specific configuration
-└── src
-    └── lib.rs      # Your smart contract logic
-```
-
-### 1. Configuration (`Cargo.toml`)
-
-Your `Cargo.toml` file defines the dependencies your contract needs. Crucially, it includes the `stylus-sdk`:
-
-```toml
-[dependencies]
-stylus-sdk = "0.10.0"
-hex = "0.4.3"
-sha2 = "0.10.8"
-mini-alloc = "1.0.0"  # Minimal memory allocator for WASM
-```
-
-- `stylus-sdk`: Provides the macros and types needed to interact with the Arbitrum chain.
-- `hex` & `sha2`: Standard Rust crates for handling hex strings and SHA-256 hashing.
-
-### 2. The Contract Logic (`src/lib.rs`)
-
-Let's break down the code for our `BtcVerifier` contract.
-
-#### Imports and Setup
+The contract logic is simple, clean, and leverages Rust's ecosystem:
 
 ```rust
-#![cfg_attr(not(feature = "export-abi"), no_main)]
-extern crate alloc;
+// ... imports ...
 
-use stylus_sdk::{prelude::*};
-use alloc::string::String;
-use alloc::vec::Vec;
-use sha2::{Sha256, Digest};
-```
-
-- `no_main`: Tells Rust not to look for a standard `main` function, as the Stylus runtime handles entry.
-- `extern crate alloc`: We need dynamic memory allocation (Vectors, Strings) in our contract.
-
-#### Storage Definition
-
-In Stylus, we define the contract's storage layout using a struct.
-
-```rust
-#[storage]
-#[entrypoint]
-pub struct BtcVerifier;
-```
-
-- `#[storage]`: Defines persistent storage. Even if we don't store any data (like in this stateless example), we need this struct.
-- `#[entrypoint]`: This macro marks `BtcVerifier` as the entry point. When someone calls this contract, Stylus looks here first.
-
-#### Public Methods
-
-This is where the magic happens. We expose functions to the world using the `#[public]` macro.
-
-```rust
 #[public]
 impl BtcVerifier {
     /// Hashes a hex string twice using SHA-256 (Bitcoin style)
     pub fn hash_btc_header(&self, header_hex: String) -> Result<String, Vec<u8>> {
-        // 1. Decode the input hex string into bytes.
+        // 1. Decode generic hex string
         let bytes = hex::decode(header_hex).map_err(|_| Vec::new())?;
         
-        // 2. Perform the first SHA-256 hash.
+        // 2. First SHA-256
         let mut hasher1 = Sha256::new();
         hasher1.update(&bytes);
         let hash1 = hasher1.finalize();
 
-        // 3. Perform the second SHA-256 hash.
-        // Bitcoin uses "Hash256" (double SHA-256) for block headers.
+        // 3. Second SHA-256 (Hash256)
         let mut hasher2 = Sha256::new();
         hasher2.update(hash1);
         let hash2 = hasher2.finalize();
 
-        // 4. Return the result as a hex string.
+        // 4. Return result as hex
         Ok(hex::encode(hash2))
     }
 }
 ```
 
-**Key Takeaways:**
-- **Standard Rust**: We are using standard libraries (`hex`, `sha2`) just like normal Rust code.
-- **Pure Computation**: This function performs heavy cryptography (`SHA256`) which is much cheaper in Stylus than Solidity.
+> [!TIP]
+> **Why Rust?**
+> Doing this cryptographic heavy lifting in Solidity is expensive (gas-wise). In Stylus (WASM), it is order-of-magnitude cheaper and safer to implement using standard libraries like `sha2`.
 
-## How to Test
+---
 
-One of the best things about Stylus is that you can test your contracts using standard Rust unit tests!
+## 🚀 2. Setting Up & Deploying
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+### 🛠️ Prerequisites
+- **Rust Toolchain**: Stable channel.
+- **Stylus CLI**: `cargo install cargo-stylus`
+- **Arbitrum Sepolia ETH**: For gas.
 
-    #[test]
-    fn test_double_sha256() {
-        let input = "68656c6c6f"; // "hello" in hex
-        
-        let verifier = BtcVerifier {};
-        let result = verifier.hash_btc_header(input.into()).unwrap();
-
-        // "hello" double-SHA256 hash
-        assert_eq!(result, "9595c9df90075148eb06860365df33584b75bff782a510c6cd4883a419833d50");
-    }
-}
+### ⚙️ Configuration
+Create a `.env` file in your project root:
+```ini
+PRIVATE_KEY=your_private_key_here
+ARB_URL=https://sepolia-rollup.arbitrum.io/rpc
 ```
 
-Run this test with:
+### 📦 Deployment
+Deploy your contract using the Stylus CLI tool. We use a dummy `bin` target in `Cargo.toml` to satisfy tool requirements, but the core artifact is the library.
+
 ```bash
-cargo test
+# Sourcing environment variables
+source .env
+
+# Deploy (using --no-verify to skip docker for speed in dev)
+cargo stylus deploy --private-key $PRIVATE_KEY --endpoint $ARB_URL --no-verify
 ```
 
-## Next Steps
+**Success Output:**
+```text
+Deployed code at address: 0xb4864bb622f3020a5d424ff2cc20738b3327f7e2
+Transaction successfully activated contract...
+```
+*Save this address! You will need it for the interaction script.*
 
-1.  **Install the Stylus CLI**: `cargo install cargo-stylus`
-2.  **Check your contract**: `cargo stylus check` verifies your contract will compile to valid WASM for Arbitrum.
-3.  **Deploy**: Use `cargo stylus deploy` to put your contract on-chain!
+---
 
-This example demonstrates how simple it is to bring powerful Rust logic to Arbitrum using Stylus. Try extending this contract to verify a full Merkle proof!
+## 🧪 3. On-Chain Verification with Script
+
+To truly verify the contract works, we don't just call it locally; we **broadcast a transaction** to the Testnet.
+
+### 📜 The Script (`scripts/src/main.rs`)
+
+We created a robust Rust script using `ethers-rs` to interact with our specific contract ABI.
+
+**Key Features:**
+- **Uses `.send()`**: Ensures an actual state-changing transaction (or at least a recorded execution) is broadcast, rather than a local node simulation (`.call()`).
+- **Stylus Method Selectors**: Stylus contracts typically export methods in `snake_case` or `camelCase` depending on compilation config. Our script correctly handles the selector mapping.
+
+### 🏃 Running the Verification
+
+1. **Update Target**: Ensure `scripts/src/main.rs` points to your deployed contract address.
+   ```rust
+   let contract_address: Address = "0xb4864bb...".parse()?;
+   ```
+
+2. **Execute**:
+   ```bash
+   cd scripts
+   source ../.env
+   cargo run
+   ```
+
+3. **Verify Output**:
+   ```text
+   Broadcasting transaction for hash_btc_header...
+   Input: 0200000... (Block Header Hex)
+   Transaction successfully broadcasted and included!
+   Transaction Hash: 0x87e8ccc...
+   Gas Used: Some(66333)
+   ```
+
+> [!IMPORTANT]
+> **Verification Success:**
+> If you see a Transaction Hash and "Transaction successfully broadcasted", your Rust Stylus contract is live and correctly processing cryptographic operations on Arbitrum Sepolia!
+
+---
+
+## 📚 Resources & Next Steps
+
+- **Stylus Docs**: [https://docs.arbitrum.io/stylus](https://docs.arbitrum.io/stylus)
+- **Repo Structure**:
+    - `src/lib.rs`: Contract source
+    - `scripts/`: Verification scripts
+    - `Cargo.toml`: Dependency management
+
+Happy Coding! 🦀 + 🔷
