@@ -9,6 +9,7 @@ hex = "0.4.3"
 sha2 = "0.10.8"
 mini-alloc = "1.0.0"
 
+
 [lib]
 crate-type = ["lib", "cdylib"]
 
@@ -22,3 +23,7 @@ strip = true
 lto = true
 panic = "abort"
 opt-level = "z"
+
+[[bin]]
+name = "btcfi_contract"
+path = "src/main.rs"

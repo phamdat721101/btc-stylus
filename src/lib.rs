@@ -46,7 +46,7 @@ mod tests {
         // "hello" in ASCII is 68656c6c6f in hex.
         // To verify: `echo -n "hello" | openssl dgst -sha256 -binary | openssl dgst -sha256`
         // Result: 9595c9df90075148eb06860365df33584b75bff782a510c6cd4883a419833d50
-        let input = "68656c6c6f";             
+        let input = "68656c6c6fsdasd";             
         
         let verifier = BtcVerifier {};
         let result = verifier.hash_btc_header(input.into()).unwrap();
